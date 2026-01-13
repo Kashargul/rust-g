@@ -15,6 +15,7 @@ use std::{
 #[test]
 fn iconforge() {
     tmp_cleanup();
+
     // Generate icons for comparison
     run_dm_tests("iconforge", false);
     // Compare said icons
@@ -208,7 +209,7 @@ fn compare_states(dm_state: &IconState, rustg_state: &IconState) -> Option<Strin
 
     if dm_state.rewind != rustg_state.rewind {
         differences.push(format!(
-            "REWING FLAG: dm: {} - rustg: {}",
+            "REWIND FLAG: dm: {} - rustg: {}",
             dm_state.rewind, rustg_state.rewind
         ));
     }

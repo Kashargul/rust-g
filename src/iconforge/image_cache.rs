@@ -5,7 +5,7 @@ use dmi::{
     icon::{Icon, IconState, dir_to_dmi_index},
 };
 use image::RgbaImage;
-use once_cell::sync::Lazy;
+use once_cell::sync::{OnceCell, Lazy};
 use std::{fs::File, hash::BuildHasherDefault, io::BufReader, sync::Arc};
 use tracy_full::zone;
 use twox_hash::XxHash64;
@@ -196,8 +196,9 @@ pub fn cache_transformed_images(
 /* ---- DMI CACHING ---- */
 
 /// A cache of DMI filepath -> Icon objects.
-static ICON_FILES: Lazy<DashMap<String, Arc<Icon>, BuildHasherDefault<XxHash64>>> =
-    Lazy::new(|| DashMap::with_hasher(BuildHasherDefault::<XxHash64>::default()));
+static ICON_FILES: Lazy<
+    DashMap<String, OnceCell<Arc<Icon>>, BuildHasherDefault<XxHash64>>,
+> = Lazy::new(|| DashMap::with_hasher(BuildHasherDefault::<XxHash64>::default()));
 
 pub fn icon_cache_clear() {
     ICON_FILES.clear();
@@ -206,35 +207,66 @@ pub fn icon_cache_clear() {
 /// Given a DMI filepath, returns a DMI Icon structure and caches it.
 pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
     zone!("filepath_to_dmi");
-    {
-        zone!("check_dmi_exists");
-        if let Some(found) = ICON_FILES.get(icon_path) {
-            return Ok(found.clone());
+
+    let cell = ICON_FILES
+        .entry(icon_path.to_owned())
+        .or_insert_with(OnceCell::new);
+
+    cell.get_or_try_init(|| {
+        zone!("load_dmi_from_disk");
+
+        let icon_file = File::open(icon_path)
+            .map_err(|err| format!("Failed to open DMI '{icon_path}' - {err}"))?;
+
+        let reader = BufReader::new(icon_file);
+
+        let dmi = Icon::load(reader)
+            .map_err(|err| format!("DMI '{icon_path}' failed to parse - {err}"))?;
+
+        Ok(Arc::new(dmi))
+    })
+    .map(Arc::clone)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::filepath_to_dmi;
+    use std::{sync::Arc, thread};
+    use rand::seq::SliceRandom;
+    use rand::rng;
+
+    #[test]
+    fn stress_test_dmi_cache_reads_and_writes() {
+        let icon_paths = vec![
+            "tests/dm/rsc/iconforge_tests.dmi",
+            "tests/dm/rsc/iconforge_gags_dm.dmi",
+        ];
+
+        let mut handles = Vec::new();
+
+        for _ in 0..16 {
+            let paths = icon_paths.clone();
+            handles.push(thread::spawn(move || {
+                let mut rng = rng();
+                let mut paths = paths;
+                for _ in 0..500 {
+                    paths.shuffle(&mut rng);
+                    let path = &paths[0];
+                    let result = filepath_to_dmi(path);
+                    assert!(result.is_ok(), "Failed to load DMI {path:?}");
+                    let first_arc: Arc<_> = result.unwrap();
+
+                    let second_arc = filepath_to_dmi(path).unwrap();
+                    assert!(Arc::ptr_eq(&first_arc, &second_arc), "Cache returned different Arc for {path:?}");
+                }
+            }));
         }
-    }
-    let icon_file = match File::open(icon_path) {
-        Ok(icon_file) => icon_file,
-        Err(err) => {
-            return Err(format!("Failed to open DMI '{icon_path}' - {err}"));
+
+        for h in handles {
+            h.join().expect("Thread panicked during cache stress test");
         }
-    };
-    let reader = BufReader::new(icon_file);
-    let dmi: Icon;
-    {
-        zone!("parse_dmi");
-        dmi = match Icon::load(reader) {
-            Ok(dmi) => dmi,
-            Err(err) => {
-                return Err(format!("DMI '{icon_path}' failed to parse - {err}"));
-            }
-        };
-    }
-    {
-        zone!("insert_dmi");
-        let dmi_arc = Arc::new(dmi);
-        let other_arc = dmi_arc.clone();
-        // Cache it for later, saving future DMI parsing operations, which are very slow.
-        ICON_FILES.insert(icon_path.to_owned(), dmi_arc);
-        Ok(other_arc)
+
+        println!("Concurrent read/write stress test passed!");
     }
 }
+
