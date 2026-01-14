@@ -240,6 +240,11 @@ mod tests {
         let icon_paths = vec![
             "tests/dm/rsc/iconforge_tests.dmi",
             "tests/dm/rsc/iconforge_gags_dm.dmi",
+            "tests/dm/rsc/iconforge_gags_dm.dmi",
+            "tests/dm/rsc/iconforge_gags_dm.dmi",
+            "tests/dm/rsc/iconforge_gags_dm.dmi",
+            "tests/dm/rsc/iconforge_tests.dmi",
+            "tests/dm/rsc/iconforge_tests.dmi",
         ];
 
         let mut handles = Vec::new();
