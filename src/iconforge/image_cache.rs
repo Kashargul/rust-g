@@ -217,7 +217,7 @@ pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
     cell.get_or_try_init(|| {
         zone!("load_dmi_from_disk");
 
-        let icon_file = File::open(icon_path)
+        let icon_file = File::open(&full_path)
             .map_err(|err| format!(
                 "Failed to open DMI '{}' (resolved to '{}') - {}",
                 icon_path,
