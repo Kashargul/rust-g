@@ -6,7 +6,7 @@ use dmi::{
 };
 use image::RgbaImage;
 use once_cell::sync::{OnceCell, Lazy};
-use std::{fs::File, hash::BuildHasherDefault, io::BufReader, sync::Arc};
+use std::{fs::File, hash::BuildHasherDefault, io::BufReader, sync::Arc, path::PathBuf};
 use tracy_full::zone;
 use twox_hash::XxHash64;
 
