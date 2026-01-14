@@ -207,7 +207,9 @@ pub fn icon_cache_clear() {
 /// Given a DMI filepath, returns a DMI Icon structure and caches it.
 pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
     zone!("filepath_to_dmi");
-
+    static ICON_ROOT: Lazy<PathBuf> =
+        Lazy::new(|| std::env::current_dir().unwrap());
+    let full_path = ICON_ROOT.join(icon_path);
     let cell = ICON_FILES
         .entry(icon_path.to_owned())
         .or_insert_with(OnceCell::new);
@@ -215,7 +217,7 @@ pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
     cell.get_or_try_init(|| {
         zone!("load_dmi_from_disk");
 
-        let icon_file = File::open(&full_path)
+        let icon_file = File::open(icon_path)
             .map_err(|err| format!(
                 "Failed to open DMI '{}' (resolved to '{}') - {}",
                 icon_path,
