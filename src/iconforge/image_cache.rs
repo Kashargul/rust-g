@@ -205,8 +205,19 @@ pub fn icon_cache_clear() {
 }
 
 static ICON_ROOT: Lazy<PathBuf> = Lazy::new(|| {
-    let exe_path = std::env::current_exe().expect("Failed to get current executable path");
-    exe_path.parent().expect("Executable has no parent folder").join("icons")
+    #[cfg(test)]
+    {
+        std::env::current_dir().expect("Failed to get current directory")
+    }
+
+    #[cfg(not(test))]
+    {
+        let exe_path = std::env::current_exe().expect("Failed to get current executable path");
+        exe_path
+            .parent()
+            .expect("Executable has no parent folder")
+            .join("icons")
+    }
 });
 
 /// Given a DMI filepath, returns a DMI Icon structure and caches it.
@@ -247,9 +258,6 @@ pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
 }
 
 #[cfg(test)]
-static ICON_ROOT: Lazy<PathBuf> = Lazy::new(|| {
-    std::env::current_dir().expect("Failed to get current directory")
-});
 mod tests {
     use super::filepath_to_dmi;
     use std::{sync::Arc, thread};
