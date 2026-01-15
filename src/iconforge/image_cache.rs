@@ -6,7 +6,7 @@ use dmi::{
 };
 use image::RgbaImage;
 use once_cell::sync::{OnceCell, Lazy};
-use std::{fs::File, hash::BuildHasherDefault, io::BufReader, sync::Arc, path::PathBuf};
+use std::{fs::File, hash::BuildHasherDefault, io::BufReader, sync::{Arc, Mutex}, path::PathBuf};
 use tracy_full::zone;
 use twox_hash::XxHash64;
 
@@ -204,6 +204,10 @@ pub fn icon_cache_clear() {
     ICON_FILES.clear();
 }
 
+static ICON_FILES: Lazy<
+    DashMap<String, Arc<Mutex<Option<Arc<Icon>>>>, BuildHasherDefault<XxHash64>>,
+> = Lazy::new(|| DashMap::with_hasher(BuildHasherDefault::<XxHash64>::default()));
+
 static ICON_ROOT: Lazy<PathBuf> = Lazy::new(|| {
     let exe_path = std::env::current_exe().expect("Failed to get current executable path");
     exe_path
@@ -219,34 +223,44 @@ pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
 
     let cell = ICON_FILES
         .entry(icon_path.to_owned())
-        .or_insert_with(OnceCell::new);
+        .or_insert_with(|| Arc::new(Mutex::new(None)));
 
-    cell.get_or_try_init(|| {
-        zone!("load_dmi_from_disk");
-        if !full_path.exists() {
-            return Err(format!(
-                "DMI path does not exist: '{}' (resolved to '{}')",
-                icon_path,
-                full_path.display()
-            ));
+    let arc_icon = {
+        let mut guard = cell.lock().unwrap();
+
+        if let Some(icon) = &*guard {
+            icon.clone()
+        } else {
+            if !full_path.exists() {
+                return Err(format!(
+                    "DMI path does not exist: '{}' (resolved to '{}')",
+                    icon_path,
+                    full_path.display()
+                ));
+            }
+
+            let icon_file = File::open(&full_path).map_err(|err| {
+                format!(
+                    "Failed to open DMI '{}' (resolved to '{}') - {}",
+                    icon_path,
+                    full_path.display(),
+                    err
+                )
+            })?;
+            let reader = BufReader::new(icon_file);
+
+            let icon = Arc::new(
+                Icon::load(reader)
+                    .map_err(|err| format!("DMI '{}' failed to parse - {}", icon_path, err))?,
+            );
+
+            *guard = Some(icon.clone());
+
+            icon
         }
+    };
 
-        let icon_file = File::open(&full_path)
-            .map_err(|err| format!(
-                "Failed to open DMI '{}' (resolved to '{}') - {}",
-                icon_path,
-                full_path.display(),
-                err
-            ))?;
-
-        let reader = BufReader::new(icon_file);
-
-        let dmi = Icon::load(reader)
-            .map_err(|err| format!("DMI '{icon_path}' failed to parse - {err}"))?;
-
-        Ok(Arc::new(dmi))
-    })
-    .map(Arc::clone)
+    Ok(arc_icon)
 }
 
 #[cfg(test)]
