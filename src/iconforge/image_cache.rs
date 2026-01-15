@@ -207,8 +207,10 @@ static ICON_FILES: Lazy<
 > = Lazy::new(|| DashMap::with_hasher(BuildHasherDefault::<XxHash64>::default()));
 
 
-static ICON_ROOT: Lazy<PathBuf> =
-    Lazy::new(|| std::env::current_dir().unwrap());
+static ICON_ROOT: Lazy<PathBuf> = Lazy::new(|| {
+    PathBuf::from("/opt/vorestation_tgs/Game/Live")
+});
+
 
 /// Given a DMI filepath, returns a DMI Icon structure and caches it.
 pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
