@@ -209,6 +209,7 @@ static ICON_ROOT: Lazy<PathBuf> = Lazy::new(|| {
     exe_path
         .parent()
         .expect("Executable has no parent folder")
+        .to_path_buf()
 });
 
 /// Given a DMI filepath, returns a DMI Icon structure and caches it.
