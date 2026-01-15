@@ -207,7 +207,7 @@ pub fn icon_cache_clear() {
 static ICON_ROOT: Lazy<PathBuf> = Lazy::new(|| {
     #[cfg(test)]
     {
-        std::env::current_dir().expect("Failed to get current directory")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
     }
 
     #[cfg(not(test))]
