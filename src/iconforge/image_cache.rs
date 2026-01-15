@@ -205,10 +205,10 @@ pub fn icon_cache_clear() {
 }
 
 static ICON_ROOT: Lazy<PathBuf> = Lazy::new(|| {
-        let exe_path = std::env::current_exe().expect("Failed to get current executable path");
-        exe_path
-            .parent()
-            .expect("Executable has no parent folder")
+    let exe_path = std::env::current_exe().expect("Failed to get current executable path");
+    exe_path
+        .parent()
+        .expect("Executable has no parent folder")
 });
 
 /// Given a DMI filepath, returns a DMI Icon structure and caches it.
