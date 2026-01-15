@@ -10,6 +10,7 @@ use std::{fs::File, hash::BuildHasherDefault, io::BufReader, sync::{Arc, Mutex},
 use tracy_full::zone;
 use twox_hash::XxHash64;
 
+
 /// A cache of UniversalIcon to UniversalIconData. In order for something to exist in this cache, it must have had any transforms applied to the images.
 static ICON_STATES: Lazy<
     DashMap<UniversalIcon, Arc<UniversalIconData>, BuildHasherDefault<XxHash64>>,
@@ -196,9 +197,6 @@ pub fn cache_transformed_images(
 /* ---- DMI CACHING ---- */
 
 /// A cache of DMI filepath -> Icon objects.
-static ICON_FILES: Lazy<
-    DashMap<String, OnceCell<Arc<Icon>>, BuildHasherDefault<XxHash64>>,
-> = Lazy::new(|| DashMap::with_hasher(BuildHasherDefault::<XxHash64>::default()));
 
 pub fn icon_cache_clear() {
     ICON_FILES.clear();
