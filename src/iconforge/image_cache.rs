@@ -224,7 +224,7 @@ pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
         .or_insert_with(|| Arc::new(Mutex::new(None)));
 
     let arc_icon = {
-        let mut guard = cell.lock().unwrap();
+        let mut guard = cell.value().lock().unwrap();
 
         if let Some(icon) = &*guard {
             icon.clone()
