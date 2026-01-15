@@ -216,6 +216,13 @@ pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
 
     cell.get_or_try_init(|| {
         zone!("load_dmi_from_disk");
+        if !full_path.exists() {
+            return Err(format!(
+                "DMI path does not exist: '{}' (resolved to '{}')",
+                icon_path,
+                full_path.display()
+            ));
+        }
 
         let icon_file = File::open(&full_path)
             .map_err(|err| format!(
