@@ -206,13 +206,9 @@ static ICON_FILES: Lazy<
     DashMap<String, Arc<Mutex<Option<Arc<Icon>>>>, BuildHasherDefault<XxHash64>>,
 > = Lazy::new(|| DashMap::with_hasher(BuildHasherDefault::<XxHash64>::default()));
 
-static ICON_ROOT: Lazy<PathBuf> = Lazy::new(|| {
-    let exe_path = std::env::current_exe().expect("Failed to get current executable path");
-    exe_path
-        .parent()
-        .expect("Executable has no parent folder")
-        .to_path_buf()
-});
+
+static ICON_ROOT: Lazy<PathBuf> =
+    Lazy::new(|| std::env::current_dir().unwrap());
 
 /// Given a DMI filepath, returns a DMI Icon structure and caches it.
 pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
