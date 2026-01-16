@@ -434,59 +434,57 @@ pub fn generate_spritesheet(
         // We can greatly reduce the amount of RgbaImages created by first finding these.
         let tree_bases_guard = tree_bases.lock().unwrap();
 
-        tree_bases_guard
-            .par_iter()
-            .for_each(|(_, icons)| {
-                zone!("transform_trees");
-                let first_icon = match icons.first() {
-                    Some((_, icon)) => icon,
-                    None => {
-                        error
-                            .lock()
-                            .unwrap()
-                            .push(String::from("Somehow found no icon for a tree."));
+        tree_bases_guard.par_iter().for_each(|(_, icons)| {
+            zone!("transform_trees");
+            let first_icon = match icons.first() {
+                Some((_, icon)) => icon,
+                None => {
+                    error
+                        .lock()
+                        .unwrap()
+                        .push(String::from("Somehow found no icon for a tree."));
+                    return;
+                }
+            };
+            let (base_icon_data, _) =
+                match first_icon.get_image_data(&sprite_name, false, false, flatten) {
+                    Ok(icon_data) => icon_data,
+                    Err(err) => {
+                        error.lock().unwrap().push(err);
                         return;
                     }
                 };
-                let (base_icon_data, _) =
-                    match first_icon.get_image_data(&sprite_name, false, false, flatten) {
-                        Ok(icon_data) => icon_data,
-                        Err(err) => {
-                            error.lock().unwrap().push(err);
-                            return;
-                        }
-                    };
-                let mut no_transforms = Option::<&UniversalIcon>::None;
-                let unique_icons = DashSet::<&UniversalIcon>::new();
-                {
-                    zone!("map_unique");
-                    icons.iter().for_each(|(_, icon)| {
+            let mut no_transforms = Option::<&UniversalIcon>::None;
+            let unique_icons = DashSet::<&UniversalIcon>::new();
+            {
+                zone!("map_unique");
+                icons.iter().for_each(|(_, icon)| {
                     // This will ensure we only map unique transform sets. This also means each UniversalIcon is guaranteed a unique icon_hash
                     // Since all icons share the same 'base'.
                     // Also check to see if the icon is already cached. If so, we can ignore this transform chain.
-                        if !image_cache::image_cache_contains(icon, flatten) {
-                            unique_icons.insert(icon);
-                        }
-                        if icon.transform.is_empty() {
-                            no_transforms = Some(icon);
-                        }
-                    });
-                }
-                if let Some(entry) = no_transforms {
-                    image_cache::cache_transformed_images(entry, base_icon_data.clone(), flatten);
-                }
-                {
-                    zone!("transform_all_leaves");
-                    if let Err(err) = transform_leaves(
-                        &unique_icons.into_iter().collect(),
-                        base_icon_data.clone(),
-                        0,
-                        flatten,
-                    ) {
-                        error.lock().unwrap().push(err);
+                    if !image_cache::image_cache_contains(icon, flatten) {
+                        unique_icons.insert(icon);
                     }
+                    if icon.transform.is_empty() {
+                        no_transforms = Some(icon);
+                    }
+                });
+            }
+            if let Some(entry) = no_transforms {
+                image_cache::cache_transformed_images(entry, base_icon_data.clone(), flatten);
+            }
+            {
+                zone!("transform_all_leaves");
+                if let Err(err) = transform_leaves(
+                    &unique_icons.into_iter().collect(),
+                    base_icon_data.clone(),
+                    0,
+                    flatten,
+                ) {
+                    error.lock().unwrap().push(err);
                 }
-            });
+            }
+        });
     }
 
     // Pick the specific icon states out of the DMI, also generating their transforms, build the spritesheet metadata.

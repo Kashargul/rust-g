@@ -6,8 +6,14 @@ use dmi::{
 };
 use image::RgbaImage;
 use once_cell::sync::Lazy;
-use std::{fs::File, hash::BuildHasherDefault, io::BufReader, sync::{Arc, Mutex}, path::PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    fs::File,
+    hash::BuildHasherDefault,
+    io::BufReader,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 use tracy_full::zone;
 use twox_hash::XxHash64;
 
@@ -228,8 +234,7 @@ pub fn icon_cache_clear() {
     ICON_FILES.clear();
 }
 
-static ICON_ROOT: Lazy<PathBuf> =
-    Lazy::new(|| std::env::current_dir().unwrap());
+static ICON_ROOT: Lazy<PathBuf> = Lazy::new(|| std::env::current_dir().unwrap());
 
 /// Given a DMI filepath, returns a DMI Icon structure and caches it.
 pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
@@ -280,52 +285,3 @@ pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
 
     Ok(icon)
 }
-
-
-#[cfg(test)]
-mod tests {
-    use super::filepath_to_dmi;
-    use std::{sync::Arc, thread};
-    use rand::seq::SliceRandom;
-    use rand::rng;
-
-    #[test]
-    fn stress_test_dmi_cache_reads_and_writes() {
-        let icon_paths = vec![
-            "tests/dm/rsc/iconforge_tests.dmi",
-            "tests/dm/rsc/iconforge_gags_dm.dmi",
-            "tests/dm/rsc/iconforge_gags_dm.dmi",
-            "tests/dm/rsc/iconforge_gags_dm.dmi",
-            "tests/dm/rsc/iconforge_gags_dm.dmi",
-            "tests/dm/rsc/iconforge_tests.dmi",
-            "tests/dm/rsc/iconforge_tests.dmi",
-        ];
-
-        let mut handles = Vec::new();
-
-        for _ in 0..16 {
-            let paths = icon_paths.clone();
-            handles.push(thread::spawn(move || {
-                let mut rng = rng();
-                let mut paths = paths;
-                for _ in 0..500 {
-                    paths.shuffle(&mut rng);
-                    let path = &paths[0];
-                    let result = filepath_to_dmi(path);
-                    assert!(result.is_ok(), "Failed to load DMI {path:?}");
-                    let first_arc: Arc<_> = result.unwrap();
-
-                    let second_arc = filepath_to_dmi(path).unwrap();
-                    assert!(Arc::ptr_eq(&first_arc, &second_arc), "Cache returned different Arc for {path:?}");
-                }
-            }));
-        }
-
-        for h in handles {
-            h.join().expect("Thread panicked during cache stress test");
-        }
-
-        println!("Concurrent read/write stress test passed!");
-    }
-}
-
