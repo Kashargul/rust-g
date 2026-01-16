@@ -7,9 +7,26 @@ use dmi::{
 use image::RgbaImage;
 use once_cell::sync::{OnceCell, Lazy};
 use std::{fs::File, hash::BuildHasherDefault, io::BufReader, sync::{Arc, Mutex}, path::PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tracy_full::zone;
 use twox_hash::XxHash64;
 
+pub static CACHE_ACTIVE: AtomicUsize = AtomicUsize::new(0);
+
+struct CacheGuard;
+
+impl CacheGuard {
+    fn new() -> Self {
+        CACHE_ACTIVE.fetch_add(1, Ordering::SeqCst);
+        CacheGuard
+    }
+}
+
+impl Drop for CacheGuard {
+    fn drop(&mut self) {
+        CACHE_ACTIVE.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 
 /// A cache of UniversalIcon to UniversalIconData. In order for something to exist in this cache, it must have had any transforms applied to the images.
 static ICON_STATES: Lazy<
@@ -21,6 +38,7 @@ static ICON_STATES_FLAT: Lazy<
 > = Lazy::new(|| DashMap::with_hasher(BuildHasherDefault::<XxHash64>::default()));
 
 pub fn image_cache_contains(icon: &UniversalIcon, flatten: bool) -> bool {
+    let _guard = CacheGuard::new();
     if flatten {
         ICON_STATES_FLAT.contains_key(icon)
     } else {
@@ -29,6 +47,7 @@ pub fn image_cache_contains(icon: &UniversalIcon, flatten: bool) -> bool {
 }
 
 pub fn image_cache_clear() {
+    let _guard = CacheGuard::new();
     ICON_STATES.clear();
     ICON_STATES_FLAT.clear();
 }
@@ -45,6 +64,7 @@ impl UniversalIcon {
         flatten: bool,
     ) -> Result<(Arc<UniversalIconData>, bool), String> {
         zone!("universal_icon_to_image_data");
+        let _guard = CacheGuard::new();
         if cached {
             zone!("check_image_cache");
             if let Some(entry) = if flatten {
@@ -187,6 +207,7 @@ pub fn cache_transformed_images(
     flatten: bool,
 ) {
     zone!("cache_transformed_images");
+    let _guard = CacheGuard::new();
     if flatten {
         ICON_STATES_FLAT.insert(uni_icon.to_owned(), image_data.to_owned());
     } else {
@@ -199,6 +220,7 @@ pub fn cache_transformed_images(
 /// A cache of DMI filepath -> Icon objects.
 
 pub fn icon_cache_clear() {
+    let _guard = CacheGuard::new();
     ICON_FILES.clear();
 }
 
@@ -226,36 +248,24 @@ pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
         if let Some(icon) = &*guard {
             icon.clone()
         } else {
-            let mut last_err = None;
+            let icon_file = File::open(&full_path).map_err(|err| {
+                format!(
+                    "Failed to open DMI '{}' (resolved to '{}') - {}",
+                    icon_path,
+                    full_path.display(),
+                    err
+                )
+            })?;
+            let reader = BufReader::new(icon_file);
 
-            for attempt in 0..3 {
-                if full_path.exists() {
-                    match File::open(&full_path) {
-                        Ok(file) => {
-                            let reader = BufReader::new(file);
-                            match Icon::load(reader) {
-                                Ok(icon) => {
-                                    let icon = Arc::new(icon);
-                                    *guard = Some(icon.clone());
-                                    return Ok(icon);
-                                }
-                                Err(err) => last_err = Some(format!("DMI '{}' failed to parse - {}", icon_path, err)),
-                            }
-                        }
-                        Err(err) => last_err = Some(format!("Failed to open DMI '{}' - {}", icon_path, err)),
-                    }
-                } else {
-                    last_err = Some(format!(
-                        "DMI path does not exist: '{}' (resolved to '{}')",
-                        icon_path,
-                        full_path.display()
-                    ));
-                }
+            let icon = Arc::new(
+                Icon::load(reader)
+                    .map_err(|err| format!("DMI '{}' failed to parse - {}", icon_path, err))?,
+            );
 
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
+            *guard = Some(icon.clone());
 
-            return Err(last_err.unwrap_or_else(|| "Unknown error loading DMI".to_string()));
+            icon
         }
     };
 
