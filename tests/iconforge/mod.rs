@@ -15,7 +15,6 @@ use std::{
 #[test]
 fn iconforge() {
     tmp_cleanup();
-
     // Generate icons for comparison
     run_dm_tests("iconforge", false);
     // Compare said icons

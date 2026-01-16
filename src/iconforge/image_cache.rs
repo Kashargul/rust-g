@@ -5,7 +5,7 @@ use dmi::{
     icon::{Icon, IconState, dir_to_dmi_index},
 };
 use image::RgbaImage;
-use once_cell::sync::{OnceCell, Lazy};
+use once_cell::sync::Lazy;
 use std::{fs::File, hash::BuildHasherDefault, io::BufReader, sync::{Arc, Mutex}, path::PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tracy_full::zone;
@@ -216,22 +216,20 @@ pub fn cache_transformed_images(
 }
 
 /* ---- DMI CACHING ---- */
+type IconCell = Arc<Mutex<Option<Arc<Icon>>>>;
+type IconMap = DashMap<String, IconCell, BuildHasherDefault<XxHash64>>;
 
 /// A cache of DMI filepath -> Icon objects.
+static ICON_FILES: Lazy<IconMap> =
+    Lazy::new(|| DashMap::with_hasher(BuildHasherDefault::<XxHash64>::default()));
 
 pub fn icon_cache_clear() {
     let _guard = CacheGuard::new();
     ICON_FILES.clear();
 }
 
-static ICON_FILES: Lazy<
-    DashMap<String, Arc<Mutex<Option<Arc<Icon>>>>, BuildHasherDefault<XxHash64>>,
-> = Lazy::new(|| DashMap::with_hasher(BuildHasherDefault::<XxHash64>::default()));
-
-
 static ICON_ROOT: Lazy<PathBuf> =
     Lazy::new(|| std::env::current_dir().unwrap());
-
 
 /// Given a DMI filepath, returns a DMI Icon structure and caches it.
 pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
