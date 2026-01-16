@@ -428,8 +428,8 @@ pub fn generate_spritesheet(
     // cache this here so we don't generate the same string 5000 times
     let sprite_name = String::from("N/A, in tree generation stage");
 
-    // Map duplicate transform sets into a tree.
     {
+        // Map duplicate transform sets into a tree.
         // This is beneficial in the case where we have the same base image, and the same set of transforms, but change 1 or 2 things at the end.
         // We can greatly reduce the amount of RgbaImages created by first finding these.
         let tree_bases_guard = tree_bases.lock().unwrap();
