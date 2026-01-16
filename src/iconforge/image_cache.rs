@@ -207,9 +207,8 @@ static ICON_FILES: Lazy<
 > = Lazy::new(|| DashMap::with_hasher(BuildHasherDefault::<XxHash64>::default()));
 
 
-static ICON_ROOT: Lazy<PathBuf> = Lazy::new(|| {
-    PathBuf::from("/opt/vorestation_tgs/Game/Live")
-});
+static ICON_ROOT: Lazy<PathBuf> =
+    Lazy::new(|| std::env::current_dir().unwrap());
 
 
 /// Given a DMI filepath, returns a DMI Icon structure and caches it.
@@ -227,32 +226,36 @@ pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
         if let Some(icon) = &*guard {
             icon.clone()
         } else {
-            if !full_path.exists() {
-                return Err(format!(
-                    "DMI path does not exist: '{}' (resolved to '{}')",
-                    icon_path,
-                    full_path.display()
-                ));
+            let mut last_err = None;
+
+            for attempt in 0..3 {
+                if full_path.exists() {
+                    match File::open(&full_path) {
+                        Ok(file) => {
+                            let reader = BufReader::new(file);
+                            match Icon::load(reader) {
+                                Ok(icon) => {
+                                    let icon = Arc::new(icon);
+                                    *guard = Some(icon.clone());
+                                    return Ok(icon);
+                                }
+                                Err(err) => last_err = Some(format!("DMI '{}' failed to parse - {}", icon_path, err)),
+                            }
+                        }
+                        Err(err) => last_err = Some(format!("Failed to open DMI '{}' - {}", icon_path, err)),
+                    }
+                } else {
+                    last_err = Some(format!(
+                        "DMI path does not exist: '{}' (resolved to '{}')",
+                        icon_path,
+                        full_path.display()
+                    ));
+                }
+
+                std::thread::sleep(std::time::Duration::from_millis(50));
             }
 
-            let icon_file = File::open(&full_path).map_err(|err| {
-                format!(
-                    "Failed to open DMI '{}' (resolved to '{}') - {}",
-                    icon_path,
-                    full_path.display(),
-                    err
-                )
-            })?;
-            let reader = BufReader::new(icon_file);
-
-            let icon = Arc::new(
-                Icon::load(reader)
-                    .map_err(|err| format!("DMI '{}' failed to parse - {}", icon_path, err))?,
-            );
-
-            *guard = Some(icon.clone());
-
-            icon
+            return Err(last_err.unwrap_or_else(|| "Unknown error loading DMI".to_string()));
         }
     };
 
