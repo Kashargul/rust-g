@@ -236,41 +236,53 @@ static ICON_ROOT: Lazy<PathBuf> =
 /// Given a DMI filepath, returns a DMI Icon structure and caches it.
 pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
     zone!("filepath_to_dmi");
+
     let full_path = ICON_ROOT.join(icon_path);
 
     let cell = ICON_FILES
         .entry(icon_path.to_owned())
         .or_insert_with(|| Arc::new(Mutex::new(None)));
 
-    let arc_icon = {
-        let mut guard = cell.value().lock().unwrap();
-
-        if let Some(icon) = &*guard {
-            icon.clone()
-        } else {
-            let icon_file = File::open(&full_path).map_err(|err| {
-                format!(
-                    "Failed to open DMI '{}' (resolved to '{}') - {}",
-                    icon_path,
-                    full_path.display(),
-                    err
-                )
-            })?;
-            let reader = BufReader::new(icon_file);
-
-            let icon = Arc::new(
-                Icon::load(reader)
-                    .map_err(|err| format!("DMI '{}' failed to parse - {}", icon_path, err))?,
-            );
-
-            *guard = Some(icon.clone());
-
-            icon
-        }
+    let mut guard = {
+        zone!("lock_dmi_cell");
+        cell.value().lock().unwrap()
     };
 
-    Ok(arc_icon)
+    if let Some(icon) = &*guard {
+        zone!("check_dmi_exists");
+        return Ok(icon.clone());
+    }
+
+    let icon_file = {
+        zone!("open_dmi_file");
+        File::open(&full_path).map_err(|err| {
+            format!(
+                "Failed to open DMI '{}' (resolved to '{}') - {}",
+                icon_path,
+                full_path.display(),
+                err
+            )
+        })?
+    };
+
+    let reader = BufReader::new(icon_file);
+
+    let icon = {
+        zone!("parse_dmi");
+        Arc::new(
+            Icon::load(reader)
+                .map_err(|err| format!("DMI '{}' failed to parse - {}", icon_path, err))?,
+        )
+    };
+
+    {
+        zone!("insert_dmi");
+        *guard = Some(icon.clone());
+    }
+
+    Ok(icon)
 }
+
 
 #[cfg(test)]
 mod tests {
