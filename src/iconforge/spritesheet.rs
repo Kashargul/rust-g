@@ -397,17 +397,17 @@ pub fn generate_spritesheet(
             .into_par_iter()
             .for_each(|icon| match image_cache::filepath_to_dmi(&icon.icon_file) {
                 Ok(_) => {
-                    if hash_icons {
-                        zone!("hash_and_insert_dmi");
-                        dmi_hashes.entry(icon.icon_file.clone()).or_insert_with(
-                            || match file_hash("xxh64_fixed", &icon.icon_file) {
-                                Ok(hash) => hash,
-                                Err(err) => {
-                                    error.lock().unwrap().push(err.to_string());
-                                    String::from("ERROR")
-                                }
-                            },
-                        );
+                    if hash_icons && !dmi_hashes.contains_key(&icon.icon_file) {
+                        zone!("hash_dmi");
+                        match file_hash("xxh64_fixed", &icon.icon_file) {
+                            Ok(hash) => {
+                                zone!("insert_dmi_hash");
+                                dmi_hashes.insert(icon.icon_file.clone(), hash);
+                            }
+                            Err(err) => {
+                                error.lock().unwrap().push(err.to_string());
+                            }
+                        };
                     }
                 }
                 Err(err) => error.lock().unwrap().push(err),
