@@ -435,7 +435,7 @@ pub fn generate_spritesheet(
         let tree_bases_guard = tree_bases.lock().unwrap();
 
         let tree_vec: Vec<Vec<(&String, &UniversalIcon)>> =
-            tree_bases_guard.values().map(|v| v.clone()).collect();
+            tree_bases_guard.values().cloned().collect();
 
         drop(tree_bases_guard);
 
