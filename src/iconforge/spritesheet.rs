@@ -434,7 +434,12 @@ pub fn generate_spritesheet(
         // We can greatly reduce the amount of RgbaImages created by first finding these.
         let tree_bases_guard = tree_bases.lock().unwrap();
 
-        tree_bases_guard.par_iter().for_each(|(_, icons)| {
+        let tree_vec: Vec<Vec<(&String, &UniversalIcon)>> =
+            tree_bases_guard.values().map(|v| v.clone()).collect();
+
+        drop(tree_bases_guard);
+
+        tree_vec.par_iter().for_each(|icons| {
             zone!("transform_trees");
             let first_icon = match icons.first() {
                 Some((_, icon)) => icon,
