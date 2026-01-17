@@ -432,12 +432,10 @@ pub fn generate_spritesheet(
         // Map duplicate transform sets into a tree.
         // This is beneficial in the case where we have the same base image, and the same set of transforms, but change 1 or 2 things at the end.
         // We can greatly reduce the amount of RgbaImages created by first finding these.
-        let tree_bases_guard = tree_bases.lock().unwrap();
-
-        let tree_vec: Vec<Vec<(&String, &UniversalIcon)>> =
-            tree_bases_guard.values().cloned().collect();
-
-        drop(tree_bases_guard);
+        let tree_vec: Vec<Vec<(&String, &UniversalIcon)>> = {
+            let guard = tree_bases.lock().unwrap();
+            guard.values().cloned().collect()
+        };
 
         tree_vec.par_iter().for_each(|icons| {
             zone!("transform_trees");
@@ -548,9 +546,12 @@ pub fn generate_spritesheet(
 
     // all images have been returned now, so continue...
     // Get all the sprites and spew them onto a spritesheet.
-    size_to_icon_objects
-        .lock()
-        .unwrap()
+    let size_entries: Vec<(String, Vec<(&String, &UniversalIcon)>)> = {
+        let guard = size_to_icon_objects.lock().unwrap();
+        guard.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    };
+
+    size_entries
         .par_iter()
         .for_each(|(size_id, sprite_entries)| {
             zone!("join_sprites");
@@ -750,7 +751,7 @@ fn transform_leaves(
         zone!("do_next_transforms");
         next_transforms
             .into_par_iter()
-            .for_each(|(transform, mut associated_icons)| {
+            .for_each(|(transform, associated_icons)| {
                 let altered_image_data = match transform.apply(image_data.clone(), flatten) {
                     Ok(data) => Arc::new(data),
                     Err(err) => {
@@ -758,31 +759,24 @@ fn transform_leaves(
                         return;
                     }
                 };
-                {
-                    zone!("filter_associated_icons");
-                    associated_icons
-                        .clone()
-                        .into_iter()
-                        .enumerate()
-                        .for_each(|(idx, icon)| {
-                            if icon.transform.len() as u8 == depth + 1
-                                && *icon.transform.last().unwrap() == transform
-                            {
-                                associated_icons.swap_remove(idx);
-                                image_cache::cache_transformed_images(
-                                    icon,
-                                    altered_image_data.clone(),
-                                    flatten,
-                                );
-                            }
-                        });
+                zone!("filter_associated_icons");
+                let (finished, remaining): (Vec<_>, Vec<_>) =
+                    associated_icons.into_iter().partition(|icon| {
+                        icon.transform.len() as u8 == depth + 1
+                            && *icon.transform.last().unwrap() == transform
+                    });
+
+                for icon in finished {
+                    image_cache::cache_transformed_images(
+                        icon,
+                        altered_image_data.clone(),
+                        flatten,
+                    );
                 }
-                if let Err(err) = transform_leaves(
-                    &associated_icons,
-                    altered_image_data.clone(),
-                    depth + 1,
-                    flatten,
-                ) {
+
+                if let Err(err) =
+                    transform_leaves(&remaining, altered_image_data.clone(), depth + 1, flatten)
+                {
                     errors.lock().unwrap().push(err);
                 }
             });
