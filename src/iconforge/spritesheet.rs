@@ -550,6 +550,24 @@ pub fn generate_spritesheet(
         let guard = size_to_icon_objects.lock().unwrap();
         guard.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     };
+    {
+        zone!("precreate_dirs");
+        for (size_id, _) in &size_entries {
+            let file_path_str = format!(
+                "{file_path}{spritesheet_name}_{size_id}.{}",
+                if generate_dmi { "dmi" } else { "png" }
+            );
+            if let Some(parent) = std::path::Path::new(&file_path_str).parent() {
+                if let Err(err) = std::fs::create_dir_all(parent) {
+                    error.lock().unwrap().push(format!(
+                        "Failed to create directory '{}' for spritesheet: {}",
+                        parent.display(),
+                        err
+                    ));
+                }
+            }
+        }
+    }
 
     size_entries
         .par_iter()
@@ -560,18 +578,8 @@ pub fn generate_spritesheet(
                 if generate_dmi { "dmi" } else { "png" }
             );
             let size_data: Vec<&str> = size_id.split('x').collect();
-            let base_width = size_data
-                .first()
-                .unwrap()
-                .to_string()
-                .parse::<u32>()
-                .unwrap();
-            let base_height = size_data
-                .last()
-                .unwrap()
-                .to_string()
-                .parse::<u32>()
-                .unwrap();
+            let base_width = size_data.first().unwrap().parse::<u32>().unwrap();
+            let base_height = size_data.last().unwrap().parse::<u32>().unwrap();
 
             if generate_dmi {
                 let output_states =
@@ -586,15 +594,13 @@ pub fn generate_spritesheet(
                     zone!("write_spritesheet_dmi");
                     {
                         zone!("create_file");
-                        let path = std::path::Path::new(&file_path);
-                        if let Err(err) = std::fs::create_dir_all(path.parent().unwrap()) {
-                            error.lock().unwrap().push(err.to_string());
-                            return;
-                        };
-                        let mut output_file = match File::create(path) {
-                            Ok(file) => file,
+                        let mut output_file = match File::create(&file_path) {
+                            Ok(f) => f,
                             Err(err) => {
-                                error.lock().unwrap().push(err.to_string());
+                                error.lock().unwrap().push(format!(
+                                    "Failed to create DMI file '{}': {}",
+                                    file_path, err
+                                ));
                                 return;
                             }
                         };
@@ -622,8 +628,11 @@ pub fn generate_spritesheet(
                 };
                 {
                     zone!("write_spritesheet_png");
-                    if let Err(err) = final_image.save(file_path) {
-                        error.lock().unwrap().push(err.to_string());
+                    if let Err(err) = final_image.save(&file_path) {
+                        error
+                            .lock()
+                            .unwrap()
+                            .push(format!("Failed to save PNG file '{}': {}", file_path, err));
                     }
                 }
             }
