@@ -227,7 +227,7 @@ pub fn icon_cache_clear() {
     ICON_FILES.clear();
 }
 
-static ICON_ROOT: Lazy<PathBuf> = Lazy::new(|| std::env::current_dir().unwrap());
+pub static ICON_ROOT: Lazy<PathBuf> = Lazy::new(|| std::env::current_dir().unwrap());
 
 /// Given a DMI filepath, returns a DMI Icon structure and caches it.
 pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {

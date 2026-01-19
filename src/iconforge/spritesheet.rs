@@ -6,7 +6,7 @@ use super::{
 use crate::{
     error::Error,
     hash::{file_hash, string_hash},
-    iconforge::image_cache::cache_transformed_images,
+    iconforge::image_cache::{ICON_ROOT, cache_transformed_images},
 };
 use dashmap::{DashMap, DashSet};
 use dmi::icon::{DmiVersion, Icon, IconState};
@@ -368,7 +368,7 @@ pub fn generate_spritesheet(
 ) -> std::result::Result<String, Error> {
     zone!("generate_spritesheet");
 
-    let base_path = std::env::current_dir().unwrap().join(file_path);
+    let base_path = ICON_ROOT.join(file_path);
 
     let hash_icons: bool = hash_icons == "1";
     let generate_dmi: bool = generate_dmi == "1";
