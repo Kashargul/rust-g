@@ -367,6 +367,10 @@ pub fn generate_spritesheet(
     flatten: &str,
 ) -> std::result::Result<String, Error> {
     zone!("generate_spritesheet");
+
+    let base_path =
+        std::fs::canonicalize(file_path).unwrap_or_else(|_| std::path::PathBuf::from(file_path));
+
     let hash_icons: bool = hash_icons == "1";
     let generate_dmi: bool = generate_dmi == "1";
     // PNGs cannot be non-flat
@@ -567,35 +571,35 @@ pub fn generate_spritesheet(
     };
     {
         zone!("precreate_dirs");
-        let mut parent_dirs = std::collections::HashSet::<PathBuf>::new();
-        let size_entries: Vec<(String, Vec<(&String, &UniversalIcon)>)> = {
-            let guard = size_to_icon_objects.lock().unwrap();
-            guard.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-        };
+        let mut parent_dirs = std::collections::HashSet::<std::path::PathBuf>::new();
 
         for (size_id, _) in &size_entries {
-            let file_path_str = format!(
-                "{file_path}{spritesheet_name}_{size_id}.{}",
+            let output_path = base_path.join(format!(
+                "{}_{}.{}",
+                spritesheet_name,
+                size_id,
                 if generate_dmi { "dmi" } else { "png" }
-            );
-            if let Some(parent) = std::path::Path::new(&file_path_str).parent() {
+            ));
+            if let Some(parent) = output_path.parent() {
                 parent_dirs.insert(parent.to_path_buf());
             }
         }
 
-        parent_dirs.into_iter().for_each(|dir| {
+        for dir in parent_dirs {
             ensure_dir_exists(dir, &error);
-        });
+        }
     }
 
     size_entries
         .par_iter()
         .for_each(|(size_id, sprite_entries)| {
             zone!("join_sprites");
-            let file_path = format!(
-                "{file_path}{spritesheet_name}_{size_id}.{}",
+            let file_path = base_path.join(format!(
+                "{}_{}.{}",
+                spritesheet_name,
+                size_id,
                 if generate_dmi { "dmi" } else { "png" }
-            );
+            ));
             let size_data: Vec<&str> = size_id.split('x').collect();
             let base_width = size_data.first().unwrap().parse::<u32>().unwrap();
             let base_height = size_data.last().unwrap().parse::<u32>().unwrap();
@@ -618,7 +622,8 @@ pub fn generate_spritesheet(
                             Err(err) => {
                                 error.lock().unwrap().push(format!(
                                     "Failed to create DMI file '{}': {}",
-                                    file_path, err
+                                    file_path.display(),
+                                    err
                                 ));
                                 return;
                             }
@@ -648,10 +653,11 @@ pub fn generate_spritesheet(
                 {
                     zone!("write_spritesheet_png");
                     if let Err(err) = final_image.save(&file_path) {
-                        error
-                            .lock()
-                            .unwrap()
-                            .push(format!("Failed to save PNG file '{}': {}", file_path, err));
+                        error.lock().unwrap().push(format!(
+                            "Failed to save PNG file '{}': {}",
+                            file_path.display(),
+                            err
+                        ));
                     }
                 }
             }
