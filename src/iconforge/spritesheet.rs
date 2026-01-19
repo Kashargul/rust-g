@@ -347,14 +347,14 @@ pub fn generate_headless(file_path: &str, sprites: &str, flatten: &str) -> Headl
 static CREATED_DIRS: Lazy<DashSet<PathBuf>> = Lazy::new(DashSet::new);
 
 fn ensure_dir_exists(path: PathBuf, error: &Arc<Mutex<Vec<String>>>) {
-    if CREATED_DIRS.insert(path.clone()) {
-        if let Err(err) = std::fs::create_dir_all(&path) {
-            error.lock().unwrap().push(format!(
-                "Failed to create directory '{}': {}",
-                path.display(),
-                err
-            ));
-        }
+    if CREATED_DIRS.insert(path.clone())
+        && let Err(err) = std::fs::create_dir_all(&path)
+    {
+        error.lock().unwrap().push(format!(
+            "Failed to create directory '{}': {}",
+            path.display(),
+            err
+        ));
     }
 }
 
