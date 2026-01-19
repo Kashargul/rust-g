@@ -5,15 +5,9 @@ use dmi::{
     icon::{Icon, IconState, dir_to_dmi_index},
 };
 use image::RgbaImage;
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::{
-    fs::File,
-    hash::BuildHasherDefault,
-    io::BufReader,
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::{fs::File, hash::BuildHasherDefault, io::BufReader, path::PathBuf, sync::Arc};
 use tracy_full::zone;
 use twox_hash::XxHash64;
 
@@ -222,8 +216,7 @@ pub fn cache_transformed_images(
 }
 
 /* ---- DMI CACHING ---- */
-type IconCell = Arc<Mutex<Option<Arc<Icon>>>>;
-type IconMap = DashMap<String, IconCell, BuildHasherDefault<XxHash64>>;
+type IconMap = DashMap<String, OnceCell<Arc<Icon>>, BuildHasherDefault<XxHash64>>;
 
 /// A cache of DMI filepath -> Icon objects.
 static ICON_FILES: Lazy<IconMap> =
@@ -244,44 +237,25 @@ pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
 
     let cell = ICON_FILES
         .entry(icon_path.to_owned())
-        .or_insert_with(|| Arc::new(Mutex::new(None)));
+        .or_insert_with(|| OnceCell::new());
 
-    let mut guard = {
-        zone!("lock_dmi_cell");
-        cell.value().lock().unwrap()
-    };
-
-    if let Some(icon) = &*guard {
-        zone!("check_dmi_exists");
-        return Ok(icon.clone());
-    }
-
-    let icon_file = {
+    cell.get_or_try_init(|| {
         zone!("open_dmi_file");
-        File::open(&full_path).map_err(|err| {
+        let icon_file = File::open(&full_path).map_err(|err| {
             format!(
                 "Failed to open DMI '{}' (resolved to '{}') - {}",
                 icon_path,
                 full_path.display(),
                 err
             )
-        })?
-    };
+        })?;
 
-    let reader = BufReader::new(icon_file);
+        let reader = BufReader::new(icon_file);
 
-    let icon = {
         zone!("parse_dmi");
-        Arc::new(
-            Icon::load(reader)
-                .map_err(|err| format!("DMI '{}' failed to parse - {}", icon_path, err))?,
-        )
-    };
-
-    {
-        zone!("insert_dmi");
-        *guard = Some(icon.clone());
-    }
-
-    Ok(icon)
+        Ok(Arc::new(Icon::load(reader).map_err(|err| {
+            format!("DMI '{}' failed to parse - {}", icon_path, err)
+        })?))
+    })
+    .map(|arc| arc.clone())
 }
