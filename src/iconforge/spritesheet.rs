@@ -344,6 +344,20 @@ pub fn generate_headless(file_path: &str, sprites: &str, flatten: &str) -> Headl
     }
 }
 
+static CREATED_DIRS: Lazy<DashSet<PathBuf>> = Lazy::new(DashSet::new);
+
+fn ensure_dir_exists(path: PathBuf, error: &Arc<Mutex<Vec<String>>>) {
+    if CREATED_DIRS.insert(path.clone()) {
+        if let Err(err) = std::fs::create_dir_all(&path) {
+            error.lock().unwrap().push(format!(
+                "Failed to create directory '{}': {}",
+                path.display(),
+                err
+            ));
+        }
+    }
+}
+
 pub fn generate_spritesheet(
     file_path: &str,
     spritesheet_name: &str,
@@ -554,6 +568,11 @@ pub fn generate_spritesheet(
     {
         zone!("precreate_dirs");
         let mut parent_dirs = std::collections::HashSet::<PathBuf>::new();
+        let size_entries: Vec<(String, Vec<(&String, &UniversalIcon)>)> = {
+            let guard = size_to_icon_objects.lock().unwrap();
+            guard.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        };
+
         for (size_id, _) in &size_entries {
             let file_path_str = format!(
                 "{file_path}{spritesheet_name}_{size_id}.{}",
@@ -564,15 +583,9 @@ pub fn generate_spritesheet(
             }
         }
 
-        for dir in parent_dirs {
-            if let Err(err) = std::fs::create_dir_all(&dir) {
-                error.lock().unwrap().push(format!(
-                    "Failed to create directory '{}' for spritesheet: {}",
-                    dir.display(),
-                    err
-                ));
-            }
-        }
+        parent_dirs.into_iter().for_each(|dir| {
+            ensure_dir_exists(dir, &error);
+        });
     }
 
     size_entries
