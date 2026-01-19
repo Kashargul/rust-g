@@ -19,6 +19,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs::File,
     hash::BuildHasherDefault,
+    path::PathBuf,
     sync::{Arc, Mutex, RwLock},
 };
 use tracy_full::zone;
@@ -552,19 +553,24 @@ pub fn generate_spritesheet(
     };
     {
         zone!("precreate_dirs");
+        let mut parent_dirs = std::collections::HashSet::<PathBuf>::new();
         for (size_id, _) in &size_entries {
             let file_path_str = format!(
                 "{file_path}{spritesheet_name}_{size_id}.{}",
                 if generate_dmi { "dmi" } else { "png" }
             );
             if let Some(parent) = std::path::Path::new(&file_path_str).parent() {
-                if let Err(err) = std::fs::create_dir_all(parent) {
-                    error.lock().unwrap().push(format!(
-                        "Failed to create directory '{}' for spritesheet: {}",
-                        parent.display(),
-                        err
-                    ));
-                }
+                parent_dirs.insert(parent.to_path_buf());
+            }
+        }
+
+        for dir in parent_dirs {
+            if let Err(err) = std::fs::create_dir_all(&dir) {
+                error.lock().unwrap().push(format!(
+                    "Failed to create directory '{}' for spritesheet: {}",
+                    dir.display(),
+                    err
+                ));
             }
         }
     }
