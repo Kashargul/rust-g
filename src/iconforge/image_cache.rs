@@ -235,9 +235,7 @@ pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
 
     let full_path = ICON_ROOT.join(icon_path);
 
-    let cell = ICON_FILES
-        .entry(icon_path.to_owned())
-        .or_insert_with(OnceCell::new);
+    let cell = ICON_FILES.entry(icon_path.to_owned()).or_default();
 
     cell.get_or_try_init(|| {
         zone!("open_dmi_file");
