@@ -368,8 +368,7 @@ pub fn generate_spritesheet(
 ) -> std::result::Result<String, Error> {
     zone!("generate_spritesheet");
 
-    let base_path =
-        std::fs::canonicalize(file_path).unwrap_or_else(|_| std::path::PathBuf::from(file_path));
+    let base_path = std::env::current_dir().unwrap().join(file_path);
 
     let hash_icons: bool = hash_icons == "1";
     let generate_dmi: bool = generate_dmi == "1";
