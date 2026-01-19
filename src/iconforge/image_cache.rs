@@ -237,7 +237,7 @@ pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
 
     let cell = ICON_FILES
         .entry(icon_path.to_owned())
-        .or_insert_with(|| OnceCell::new());
+        .or_insert_with(OnceCell::new);
 
     cell.get_or_try_init(|| {
         zone!("open_dmi_file");
@@ -257,5 +257,5 @@ pub fn filepath_to_dmi(icon_path: &str) -> Result<Arc<Icon>, String> {
             format!("DMI '{}' failed to parse - {}", icon_path, err)
         })?))
     })
-    .map(|arc| arc.clone())
+    .cloned()
 }
